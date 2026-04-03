@@ -8,25 +8,30 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  InteractionResponseFlags
+  Events
 } = require('discord.js');
 
+// Web server
 app.get("/", (req, res) => res.send("Bot is running!"));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("Web server ready"));
 
+// Discord client
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-client.once('ready', () => console.log(`${client.user.tag} is online.`));
+// Ready event
+client.once(Events.ClientReady, () => {
+  console.log(`${client.user.tag} is online.`);
+});
 
-client.on('interactionCreate', async interaction => {
+// Interaction handler
+client.on(Events.InteractionCreate, async interaction => {
+  try {
+    // Slash command: /request
+    if (interaction.isChatInputCommand() && interaction.commandName === 'request') {
+      await interaction.deferReply({ ephemeral: true });
 
-  // SLASH COMMAND
-  if (interaction.isChatInputCommand() && interaction.commandName === 'request') {
-    await interaction.deferReply({ flags: InteractionResponseFlags.Ephemeral });
-
-    try {
       const aircraft = interaction.options.getString('aircraft');
       const callsign = interaction.options.getString('callsign');
       const departure = interaction.options.getString('departure');
@@ -62,36 +67,39 @@ client.on('interactionCreate', async interaction => {
       if (!channel) throw new Error("Approval channel not found!");
 
       await channel.send({ embeds: [embed], components: [row] });
-
       await interaction.editReply('Your flight request has been submitted! ✈️');
-
-    } catch (error) {
-      console.error(error);
-      await interaction.editReply('There was an error submitting your request.');
-    }
-  }
-
-  // BUTTON INTERACTIONS
-  if (interaction.isButton()) {
-    const staffRoleId = process.env.STAFF_ROLE_ID;
-    if (!interaction.member.roles.cache.has(staffRoleId)) {
-      return interaction.reply({ content: 'You are not allowed to approve/deny.', flags: InteractionResponseFlags.Ephemeral });
     }
 
-    const embed = EmbedBuilder.from(interaction.message.embeds[0]);
+    // Button interactions
+    if (interaction.isButton()) {
+      const staffRoleId = process.env.STAFF_ROLE_ID;
+      if (!interaction.member.roles.cache.has(staffRoleId)) {
+        return interaction.reply({ content: 'You are not allowed to approve/deny.', ephemeral: true });
+      }
 
-    if (interaction.customId === 'approve') {
-      embed.setColor('Green')
-           .setFooter({ text: `Approved by ${interaction.user.tag}` });
-      await interaction.update({ embeds: [embed], components: [] });
+      const embed = EmbedBuilder.from(interaction.message.embeds[0]);
+
+      if (interaction.customId === 'approve') {
+        embed.setColor('Green')
+             .setFooter({ text: `Approved by ${interaction.user.tag}` });
+        await interaction.update({ embeds: [embed], components: [] });
+      }
+
+      if (interaction.customId === 'deny') {
+        embed.setColor('Red')
+             .setFooter({ text: `Denied by ${interaction.user.tag}` });
+        await interaction.update({ embeds: [embed], components: [] });
+      }
     }
-
-    if (interaction.customId === 'deny') {
-      embed.setColor('Red')
-           .setFooter({ text: `Denied by ${interaction.user.tag}` });
-      await interaction.update({ embeds: [embed], components: [] });
+  } catch (error) {
+    console.error(error);
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply('There was an error processing this interaction.');
+    } else {
+      await interaction.reply({ content: 'There was an error processing this interaction.', ephemeral: true });
     }
   }
 });
 
+// Login
 client.login(process.env.TOKEN);
