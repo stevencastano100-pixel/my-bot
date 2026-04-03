@@ -7,6 +7,7 @@ app.get("/", (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("Web server ready"));
+
 require('dotenv').config();
 const {
   Client,
@@ -27,48 +28,59 @@ client.once('ready', () => {
 
 client.on('interactionCreate', async interaction => {
 
+  // SLASH COMMANDS
   if (interaction.isChatInputCommand()) {
     if (interaction.commandName === 'request') {
 
-      const aircraft = interaction.options.getString('aircraft');
-      const callsign = interaction.options.getString('callsign');
-      const departure = interaction.options.getString('departure');
-      const arrival = interaction.options.getString('arrival');
-      const flighttime = interaction.options.getString('flighttime');
+      // IMPORTANT: instantly respond to avoid timeout
+      await interaction.deferReply({ ephemeral: true });
 
-      const embed = new EmbedBuilder()
-        .setTitle('🛫 Flight Request')
-        .setColor('Yellow')
-        .addFields(
-          { name: 'Submitted By', value: `${interaction.user}` },
-          { name: 'Aircraft', value: aircraft, inline: true },
-          { name: 'Callsign', value: callsign, inline: true },
-          { name: 'Departure', value: departure.toUpperCase(), inline: true },
-          { name: 'Arrival', value: arrival.toUpperCase(), inline: true },
-          { name: 'Flight Time', value: flighttime, inline: true }
-        )
-        .setFooter({ text: 'Status: Pending Approval' })
-        .setTimestamp();
+      try {
+        const aircraft = interaction.options.getString('aircraft');
+        const callsign = interaction.options.getString('callsign');
+        const departure = interaction.options.getString('departure');
+        const arrival = interaction.options.getString('arrival');
+        const flighttime = interaction.options.getString('flighttime');
 
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId('approve')
-          .setLabel('Approve')
-          .setStyle(ButtonStyle.Success),
+        const embed = new EmbedBuilder()
+          .setTitle('🛫 Flight Request')
+          .setColor('Yellow')
+          .addFields(
+            { name: 'Submitted By', value: `${interaction.user}` },
+            { name: 'Aircraft', value: aircraft, inline: true },
+            { name: 'Callsign', value: callsign, inline: true },
+            { name: 'Departure', value: departure.toUpperCase(), inline: true },
+            { name: 'Arrival', value: arrival.toUpperCase(), inline: true },
+            { name: 'Flight Time', value: flighttime, inline: true }
+          )
+          .setFooter({ text: 'Status: Pending Approval' })
+          .setTimestamp();
 
-        new ButtonBuilder()
-          .setCustomId('deny')
-          .setLabel('Deny')
-          .setStyle(ButtonStyle.Danger)
-      );
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId('approve')
+            .setLabel('Approve')
+            .setStyle(ButtonStyle.Success),
 
-      const channel = await client.channels.fetch(process.env.APPROVAL_CHANNEL_ID);
-      await channel.send({ embeds: [embed], components: [row] });
+          new ButtonBuilder()
+            .setCustomId('deny')
+            .setLabel('Deny')
+            .setStyle(ButtonStyle.Danger)
+        );
 
-      await interaction.reply({ content: 'Your flight request has been submitted!', ephemeral: true });
+        const channel = await client.channels.fetch(process.env.APPROVAL_CHANNEL_ID);
+        await channel.send({ embeds: [embed], components: [row] });
+
+        await interaction.editReply('Your flight request has been submitted! ✈️');
+
+      } catch (error) {
+        console.error(error);
+        await interaction.editReply('There was an error submitting your request.');
+      }
     }
   }
 
+  // BUTTON INTERACTIONS
   if (interaction.isButton()) {
 
     if (!interaction.member.roles.cache.has(process.env.STAFF_ROLE_ID)) {
